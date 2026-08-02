@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invoices — Gentle Care Transit</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="/assets/favicon.png" type="image/png" />
+</head>
+<body>
+  <nav id="app-nav"></nav>
+  <main>
+    <div class="portal-page">
+      <h1 id="heading">Invoices</h1>
+      <div id="admin-nav" hidden>
+        <p>
+          <a href="/admin/rate-schedules.html">Rate schedules</a> ·
+          <a href="/admin/medicaid-export.html">Medicaid export</a>
+        </p>
+        <p>
+          <button class="btn btn--primary" id="generate-btn">Generate invoices for completed trips</button>
+          <span class="form-error" id="generate-error" hidden></span>
+        </p>
+      </div>
+      <div id="content">
+        <div class="page-status">Loading session...</div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/admin/invoices-entry.js"></script>
+</body>
+</html>

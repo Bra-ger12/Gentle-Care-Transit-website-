@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rate schedules — Gentle Care Transit</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="/assets/favicon.png" type="image/png" />
+</head>
+<body>
+  <nav id="app-nav"></nav>
+  <main>
+    <div class="portal-page">
+      <h1>Rate schedules</h1>
+      <p><a href="/admin/invoices.html">Invoices</a> · <a href="/admin/medicaid-export.html">Medicaid export</a></p>
+      <div id="table-content">
+        <div class="page-status">Loading session...</div>
+      </div>
+
+      <h2>Add a rate schedule</h2>
+      <form class="auth-form" id="rate-form" hidden>
+        <label for="mobility_need">Mobility tier</label>
+        <select id="mobility_need" name="mobility_need">
+          <option value="">Default (all riders)</option>
+        </select>
+
+        <label for="base_fare">Base fare</label>
+        <input type="number" id="base_fare" step="0.01" min="0" required />
+
+        <label for="per_mile_rate">Per-mile rate</label>
+        <input type="number" id="per_mile_rate" step="0.01" min="0" required />
+
+        <label for="effective_from">Effective from</label>
+        <input type="date" id="effective_from" required />
+
+        <button type="submit" id="submit-btn">Add rate schedule</button>
+        <p class="form-error" id="error" hidden></p>
+      </form>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/admin/rate-schedules.js"></script>
+</body>
+</html>

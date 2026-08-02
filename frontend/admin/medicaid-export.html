@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Medicaid export — Gentle Care Transit</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="/assets/favicon.png" type="image/png" />
+</head>
+<body>
+  <nav id="app-nav"></nav>
+  <main>
+    <div class="portal-page">
+      <h1>Medicaid export</h1>
+      <p><a href="/admin/invoices.html">Invoices</a> · <a href="/admin/rate-schedules.html">Rate schedules</a></p>
+      <p class="page-status-note">
+        Exports finalized/paid invoices with a Medicaid ID on file, for the selected trip-date range. This is a
+        general reimbursement export, not a certified ND DHS claim form.
+      </p>
+      <div id="session-status" class="page-status">Loading session...</div>
+      <form class="auth-form" id="export-form" hidden>
+        <label for="date_from">From</label>
+        <input type="date" id="date_from" required />
+
+        <label for="date_to">To</label>
+        <input type="date" id="date_to" required />
+
+        <div class="export-actions">
+          <button type="button" class="btn btn--primary" id="csv-btn" disabled>Download CSV</button>
+          <button type="button" class="btn btn--primary" id="pdf-btn" disabled>Download PDF</button>
+        </div>
+        <p class="form-error" id="error" hidden></p>
+      </form>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/admin/medicaid-export.js"></script>
+</body>
+</html>

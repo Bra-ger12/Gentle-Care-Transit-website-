@@ -1,0 +1,4 @@
+-r base.txt
+gunicorn==23.0.0
+uvicorn[standard]==0.34.0
+whitenoise==6.8.2

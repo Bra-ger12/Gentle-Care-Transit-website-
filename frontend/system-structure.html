@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>System Structure — Gentle Care Transit</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    /* Page-scoped styles for the system-map diagram. Uses the global design
+       tokens from styles.css; a few warm greys/greens are diagram-only. */
+    .sm-wrap { max-width: 1160px; margin: 0 auto; padding: 48px 32px 64px; box-sizing: border-box; }
+    .sm-kicker-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .sm-logo { width: 36px; height: 36px; border-radius: 10px; background: var(--secondary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sm-logo svg { width: 20px; height: 20px; }
+    .sm-kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; color: var(--text-muted); }
+    .sm-title { font-family: var(--font-display); font-size: 34px; font-weight: 600; margin: 8px 0 6px; }
+    .sm-intro { font-size: 15px; color: var(--text-muted); margin: 0 0 40px; max-width: 560px; }
+
+    .sm-flow-col { display: flex; flex-direction: column; gap: 0; }
+
+    .sm-entries { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
+    .sm-entry { display: block; width: 300px; border-radius: 14px; padding: 18px 20px; box-sizing: border-box; text-decoration: none; }
+    .sm-entry:hover { text-decoration: none; }
+    .sm-entry--public { background: var(--navy); }
+    .sm-entry--staff { background: var(--navy-800); border: 1px solid var(--secondary); }
+    .sm-entry__tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; margin: 0 0 4px; }
+    .sm-entry--public .sm-entry__tag { color: var(--navy-200); }
+    .sm-entry--staff .sm-entry__tag { color: var(--secondary); }
+    .sm-entry__title { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: #fff; margin: 0; }
+    .sm-entry__desc { font-size: 12px; color: var(--navy-100); margin: 6px 0 0; line-height: 1.5; }
+
+    .sm-connector { display: flex; justify-content: center; padding: 4px 0; color: #c8c2ba; }
+    .sm-connector svg { max-width: 100%; }
+
+    .sm-portals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+    .sm-col { display: flex; flex-direction: column; gap: 10px; }
+    .sm-portal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+    .sm-portal--patient { border-top: 3px solid var(--navy-600); }
+    .sm-portal--driver { border-top: 3px solid var(--secondary); }
+    .sm-portal--admin { border-top: 3px solid var(--navy-800); }
+    .sm-portal__tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; margin: 0 0 4px; }
+    .sm-portal--patient .sm-portal__tag { color: var(--navy-600); }
+    .sm-portal--driver .sm-portal__tag { color: var(--amber-600); }
+    .sm-portal--admin .sm-portal__tag { color: var(--navy-800); }
+    .sm-portal__title { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin: 0; }
+    .sm-portal__meta { font-size: 12px; color: var(--text-muted); margin: 4px 0 0; line-height: 1.5; }
+
+    .sm-fn { border: 1.5px dashed #c8c2ba; border-radius: 12px; padding: 12px 16px; background: rgba(255, 255, 255, 0.5); }
+    .sm-fn__title { font-size: 13px; font-weight: 600; margin: 0; }
+    .sm-fn__desc { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; }
+
+    .sm-section { margin-top: 40px; }
+    .sm-h2 { font-family: var(--font-display); font-size: 22px; font-weight: 600; margin: 0 0 16px; }
+    .sm-flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+    .sm-step { flex: 1; min-width: 150px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .sm-step__tag { font-family: var(--font-mono); font-size: 10px; margin: 0 0 4px; }
+    .sm-step__tag--patient { color: var(--navy-600); }
+    .sm-step__tag--admin { color: var(--navy-800); }
+    .sm-step__tag--driver { color: var(--amber-600); }
+    .sm-step__tag--done { color: var(--success); }
+    .sm-step__desc { font-size: 13px; margin: 0; line-height: 1.5; }
+    .sm-arrow { display: flex; align-items: center; padding: 0 6px; color: #c8c2ba; }
+    .sm-flow-note { font-size: 12px; color: var(--text-muted); margin: 10px 0 0; }
+
+    .sm-shell { margin-top: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; }
+    .sm-shell__tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; color: var(--text-muted); margin: 0 0 10px; }
+    .sm-shell__cols { display: flex; gap: 24px; flex-wrap: wrap; }
+    .sm-shell__col { flex: 1; min-width: 200px; }
+    .sm-shell__col-title { font-size: 13px; font-weight: 600; margin: 0; }
+    .sm-shell__col-desc { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; }
+
+    .sm-note { font-size: 13px; color: var(--text-muted); margin: 24px 0 0; }
+    .sm-note .mono { font-family: var(--font-mono); font-size: 12px; }
+
+    @media (max-width: 800px) {
+      .sm-portals { grid-template-columns: 1fr; }
+      .sm-wrap { padding: 32px 20px 48px; }
+      .sm-title { font-size: 28px; }
+    }
+  </style>
+  <link rel="icon" href="/assets/favicon.png" type="image/png" />
+</head>
+<body>
+  <div class="sm-wrap">
+    <div class="sm-kicker-row">
+      <a class="sm-logo" href="/" aria-label="Gentle Care Transit home">
+        <img src="/assets/logo-mark.png" alt="" width="20" height="20" />
+      </a>
+      <span class="sm-kicker">GENTLE CARE TRANSIT · SYSTEM MAP</span>
+    </div>
+    <h1 class="sm-title">How the system is structured</h1>
+    <p class="sm-intro">Based on the NEMT system design — two entry points lead to three role-based portals. Solid boxes are built screens; dashed boxes are functions inside a portal.</p>
+
+    <div class="sm-flow-col">
+      <div class="sm-entries">
+        <a class="sm-entry sm-entry--public" href="/login.html">
+          <p class="sm-entry__tag">ENTRY · PUBLIC</p>
+          <p class="sm-entry__title">Login &amp; Registration</p>
+          <p class="sm-entry__desc">Sign in / create account · Rider &amp; Driver role switch · forgot password · remember me · terms consent</p>
+        </a>
+        <a class="sm-entry sm-entry--staff" href="/login.html">
+          <p class="sm-entry__tag">ENTRY · STAFF ONLY</p>
+          <p class="sm-entry__title">Admin Login</p>
+          <p class="sm-entry__desc">Staff email + password · invitation-only accounts (two-factor &amp; trusted-device planned)</p>
+        </a>
+      </div>
+
+      <div class="sm-connector">
+        <svg width="700" height="56" viewBox="0 0 700 56">
+          <path d="M238 0 v14 Q238 22 230 22 H128 Q120 22 120 30 V56" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <path d="M238 0 v14 Q238 22 246 22 H342 Q350 22 350 30 V56" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <path d="M562 0 V56" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <path d="M116 50 l4 6 4-6 M346 50 l4 6 4-6 M558 50 l4 6 4-6" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+      </div>
+
+      <div class="sm-portals">
+        <div class="sm-col">
+          <div class="sm-portal sm-portal--patient">
+            <p class="sm-portal__tag">ACTOR · PATIENT</p>
+            <p class="sm-portal__title">Patient Portal</p>
+            <p class="sm-portal__meta">Profile: name, address, contacts, medical notes</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Request a Ride</p>
+            <p class="sm-fn__desc">Booking request → 0..1 trip once approved &amp; assigned</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Track Trip Status</p>
+            <p class="sm-fn__desc">Live status of the ongoing trip</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Trip History</p>
+            <p class="sm-fn__desc">All completed rides</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Billing</p>
+            <p class="sm-fn__desc">Automatic billing notifications after trip completion</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Rating &amp; Review</p>
+            <p class="sm-fn__desc">Rate the driver; feeds driver performance rating</p>
+          </div>
+        </div>
+
+        <div class="sm-col">
+          <div class="sm-portal sm-portal--driver">
+            <p class="sm-portal__tag">ACTOR · DRIVER</p>
+            <p class="sm-portal__title">Driver Portal</p>
+            <p class="sm-portal__meta">Profile: license, availability, rating · linked vehicle (plate, model, type) · 1..* trips</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Set Availability</p>
+            <p class="sm-fn__desc">Online / offline status toggle</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Accept Trip</p>
+            <p class="sm-fn__desc">Notification of assigned trip → accept → trip becomes active</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">View &amp; Update Trip Status</p>
+            <p class="sm-fn__desc">Progress updates the patient tracks live; mark complete</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Generate Reports</p>
+            <p class="sm-fn__desc">Trips, miles, and earnings summaries</p>
+          </div>
+        </div>
+
+        <div class="sm-col">
+          <div class="sm-portal sm-portal--admin">
+            <p class="sm-portal__tag">ACTOR · ADMIN</p>
+            <p class="sm-portal__title">Admin Console</p>
+            <p class="sm-portal__meta">Control center — oversees the entire system</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Manage Accounts</p>
+            <p class="sm-fn__desc">Patient and driver accounts; view all data</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Manage Trip Operations</p>
+            <p class="sm-fn__desc">Review booking requests, assign trips to available drivers</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Vehicle Management</p>
+            <p class="sm-fn__desc">Fleet records: plate number, model, vehicle type</p>
+          </div>
+          <div class="sm-fn">
+            <p class="sm-fn__title">Generate Reports</p>
+            <p class="sm-fn__desc">System-wide reporting across trips, drivers, billing</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="sm-section">
+        <h2 class="sm-h2">Overall system flow</h2>
+        <div class="sm-flow">
+          <div class="sm-step">
+            <p class="sm-step__tag sm-step__tag--patient">1 · PATIENT</p>
+            <p class="sm-step__desc">Registers → logs in → books a ride → submits request</p>
+          </div>
+          <div class="sm-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="sm-step">
+            <p class="sm-step__tag sm-step__tag--admin">2 · ADMIN</p>
+            <p class="sm-step__desc">Reviews the request → assigns trip to an available driver</p>
+          </div>
+          <div class="sm-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="sm-step">
+            <p class="sm-step__tag sm-step__tag--driver">3 · DRIVER</p>
+            <p class="sm-step__desc">Gets notified → accepts → trip active → updates status while patient tracks</p>
+          </div>
+          <div class="sm-arrow"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="sm-step">
+            <p class="sm-step__tag sm-step__tag--done">4 · COMPLETION</p>
+            <p class="sm-step__desc">Trip completes → automatic billing notification → rating &amp; review</p>
+          </div>
+        </div>
+        <p class="sm-flow-note">Throughout: admin manages the system and generates reports.</p>
+      </div>
+
+      <div class="sm-shell">
+        <p class="sm-shell__tag">SHARED SHELL (ALL SIGNED-IN ROLES)</p>
+        <div class="sm-shell__cols">
+          <div class="sm-shell__col">
+            <p class="sm-shell__col-title">Header</p>
+            <p class="sm-shell__col-desc">Logo, role badge, user menu with sign out</p>
+          </div>
+          <div class="sm-shell__col">
+            <p class="sm-shell__col-title">Footer</p>
+            <p class="sm-shell__col-desc">© Gentle Care Transit · Privacy, Terms, Contact</p>
+          </div>
+          <div class="sm-shell__col">
+            <p class="sm-shell__col-title">Sign out</p>
+            <p class="sm-shell__col-desc">Returns to Login &amp; Registration</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="sm-note">Built entry pages: <a href="/login.html">Login</a> · <a href="/register.html">Register</a>. The three portals — Patient, Driver, and Admin — are live in this app once you sign in.</p>
+    </div>
+  </div>
+</body>
+</html>

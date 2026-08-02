@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in — Gentle Care Transit</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="/assets/favicon.png" type="image/png" />
+</head>
+<body>
+  <main class="split-shell">
+    <section class="split-shell__brand">
+      <div class="brand">
+        <span class="logo-mark"><img src="/assets/logo-mark.png" alt="" width="20" height="20" /></span>
+        <span class="brand__text">
+          <span class="brand__name">Gentle Care Transit</span>
+          <span class="brand__subtitle">NORTH DAKOTA NEMT</span>
+        </span>
+      </div>
+      <div>
+        <h1 class="split-shell__heading">Safe, reliable rides<br />to your care.</h1>
+        <p class="split-shell__tagline">Connecting patients, drivers, and coordinators across North Dakota — from Fargo to Dickinson, Minot to Grand Forks.</p>
+      </div>
+      <div class="split-shell__footer">
+        <div class="split-shell__status">
+          <span class="split-shell__status-dot"></span>
+          <span>System operational</span>
+        </div>
+        <div>Bismarck HQ</div>
+      </div>
+    </section>
+    <section class="split-shell__form-side">
+      <div class="auth-page">
+        <h1>Log in</h1>
+        <form class="auth-form" id="login-form" novalidate>
+          <label for="identifier">Email or phone</label>
+          <input type="text" id="identifier" name="identifier" autocomplete="username" />
+
+          <label for="password">Password</label>
+          <div class="field-with-action">
+            <input type="password" id="password" name="password" autocomplete="current-password" />
+            <button type="button" class="field-toggle" id="password-toggle" aria-label="Show password">Show</button>
+          </div>
+
+          <div class="auth-form__row">
+            <label class="checkbox-label"><input type="checkbox" id="remember-me" /> Remember me</label>
+            <a href="/forgot-password.html" class="auth-form__link">Forgot password?</a>
+          </div>
+
+          <button type="submit" id="submit-btn">
+            <span class="spinner" id="submit-spinner" hidden></span>
+            <span id="submit-label">Log in</span>
+          </button>
+          <p class="form-error" id="error" aria-live="polite" hidden></p>
+        </form>
+        <p class="page-status-note"><a href="/register.html">Need an account? Register</a></p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/js/pages/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your reports — Gentle Care Transit</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="/assets/favicon.png" type="image/png" />
+</head>
+<body>
+  <nav id="app-nav"></nav>
+  <main>
+    <div class="portal-page">
+      <h1>Your reports</h1>
+
+      <form class="date-range-form" id="filter-form">
+        <label>From <input type="date" id="date_from" /></label>
+        <label>To <input type="date" id="date_to" /></label>
+        <button type="submit" class="btn btn--primary">Apply</button>
+      </form>
+      <p class="page-status-note">Defaults to the trailing 30 days when no range is set.</p>
+
+      <div id="content">
+        <div class="page-status">Loading session...</div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="/js/pages/driver/reports.js"></script>
+</body>
+</html>
