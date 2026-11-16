@@ -5,11 +5,11 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 
-from apps.accounts.tests.factories import RiderProfileFactory
+from apps.accounts.tests.factories import AdminFactory, RiderProfileFactory
 from apps.trips.models import RecurringTripSeries, Trip, Weekday
 from apps.trips.services.maps import RouteResolution
 from apps.trips.tasks import generate_recurring_trips
-from apps.trips.tests.factories import RecurringTripSeriesFactory
+from apps.trips.tests.factories import RecurringTripSeriesFactory, ServiceFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -30,9 +30,11 @@ def test_creating_a_series_triggers_initial_generation(mock_route, client, _auth
     _auth(client, profile.user)
 
     today = timezone.localdate()
+    service = ServiceFactory()
     payload = {
         "pickup_address": "123 Main St, Fargo, ND",
         "dropoff_address": "456 Broadway, Fargo, ND",
+        "service_id": str(service.id),
         "pickup_time": "09:00:00",
         "weekdays": [today.weekday()],
         "start_date": today.isoformat(),
@@ -48,6 +50,64 @@ def test_creating_a_series_triggers_initial_generation(mock_route, client, _auth
 
     series = RecurringTripSeries.objects.get(id=response.data["id"])
     assert Trip.objects.filter(recurring_series=series).exists()
+
+
+@patch("apps.trips.serializers.resolve_route", return_value=ROUTE_RESULT)
+def test_admin_can_create_recurring_series_for_rider(mock_route, client, _auth):
+    # FIX #3: dispatch admins can create recurring rides for a patient by phone.
+    admin = AdminFactory()
+    profile = RiderProfileFactory()
+    _auth(client, admin)
+
+    today = timezone.localdate()
+    service = ServiceFactory()
+    payload = {
+        "rider_id": profile.id,
+        "pickup_address": "123 Main St, Fargo, ND",
+        "dropoff_address": "456 Broadway, Fargo, ND",
+        "service_id": str(service.id),
+        "pickup_time": "09:00:00",
+        "weekdays": [today.weekday()],
+        "start_date": today.isoformat(),
+        "end_date": (today + timedelta(days=13)).isoformat(),
+        "mobility_need": "",
+        "notes": "",
+    }
+
+    response = client.post("/api/trips/recurring-series/", payload, format="json")
+
+    assert response.status_code == 201, response.data
+    series = RecurringTripSeries.objects.get(id=response.data["id"])
+    assert series.rider == profile
+    mock_route.assert_called_once()
+
+
+@patch("apps.trips.serializers.resolve_route", return_value=ROUTE_RESULT)
+def test_rider_cannot_create_recurring_series_for_another_rider(mock_route, client, _auth):
+    # FIX #3: rider_id is only honored for admins.
+    profile = RiderProfileFactory()
+    other = RiderProfileFactory()
+    _auth(client, profile.user)
+
+    today = timezone.localdate()
+    service = ServiceFactory()
+    payload = {
+        "rider_id": other.id,
+        "pickup_address": "123 Main St, Fargo, ND",
+        "dropoff_address": "456 Broadway, Fargo, ND",
+        "service_id": str(service.id),
+        "pickup_time": "09:00:00",
+        "weekdays": [today.weekday()],
+        "start_date": today.isoformat(),
+        "end_date": (today + timedelta(days=13)).isoformat(),
+        "mobility_need": "",
+        "notes": "",
+    }
+
+    response = client.post("/api/trips/recurring-series/", payload, format="json")
+
+    assert response.status_code == 400
+    assert not RecurringTripSeries.objects.filter(rider=other).exists()
 
 
 def test_generate_recurring_trips_produces_correct_dates():

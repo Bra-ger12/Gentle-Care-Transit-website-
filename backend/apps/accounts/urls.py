@@ -12,6 +12,7 @@ router.register("time-off", views.DriverTimeOffViewSet, basename="time-off")
 urlpatterns = [
     path("register/", views.RegisterView.as_view(), name="auth-register"),
     path("login/", views.LoginView.as_view(), name="auth-login"),
+    path("csrf/", views.CsrfTokenView.as_view(), name="auth-csrf"),
     path("refresh/", views.RefreshView.as_view(), name="auth-refresh"),
     path("logout/", views.LogoutView.as_view(), name="auth-logout"),
     path("me/", views.MeView.as_view(), name="auth-me"),

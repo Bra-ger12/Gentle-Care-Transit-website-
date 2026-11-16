@@ -10,6 +10,7 @@ from apps.accounts.tests.factories import AdminFactory, RiderProfileFactory
 from apps.operations.models import ServiceArea, ServiceAreaKind, SystemSetting
 from apps.operations.services import ServiceAreaError, check_service_area, is_covered
 from apps.trips.models import Trip
+from apps.trips.tests.factories import ServiceFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -92,10 +93,12 @@ def test_check_is_skipped_when_enforcement_is_off():
 
 
 def _booking(**overrides):
+    service = overrides.pop("service", None) or ServiceFactory()
     payload = {
         "scheduled_pickup_time": (timezone.now() + timedelta(days=3)).isoformat(),
         "pickup_address": BISMARCK,
         "dropoff_address": "Sanford Health, 300 N 7th St, Bismarck, ND",
+        "service_id": str(service.id),
     }
     payload.update(overrides)
     return payload
@@ -126,6 +129,7 @@ def test_booking_outside_the_area_is_rejected_with_a_useful_message(client, _aut
 def test_recurring_series_honours_the_service_area(client, _auth):
     place("BISMARCK")
     profile = RiderProfileFactory()
+    service = ServiceFactory()
     _auth(client, profile.user)
     today = timezone.localdate()
 
@@ -134,6 +138,7 @@ def test_recurring_series_honours_the_service_area(client, _auth):
         {
             "pickup_address": BISMARCK,
             "dropoff_address": FARGO,
+            "service_id": str(service.id),
             "pickup_time": "09:00:00",
             "weekdays": [today.weekday()],
             "start_date": today.isoformat(),

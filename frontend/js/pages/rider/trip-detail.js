@@ -19,7 +19,7 @@ import { tripStatusBadge } from "../../ui/badges.js";
 import { ratingStars } from "../../ui/rating.js";
 import { statusTimeline } from "../../ui/status-timeline.js";
 import { loadGoogleMaps } from "../../ui/maps.js";
-import { formatDateTime } from "../../ui/format.js";
+import { formatCurrency, formatDateTime } from "../../ui/format.js";
 import { showToast } from "../../ui/toast.js";
 
 const ACTIVE_STATUSES = ["ASSIGNED", "EN_ROUTE", "ARRIVED", "PICKED_UP"];
@@ -53,6 +53,8 @@ if (user) {
       el("p", { text: `Pickup: ${formatDateTime(trip.scheduled_pickup_time)}` }),
       el("p", { text: `${trip.pickup_address} → ${trip.dropoff_address}` }),
       el("p", { text: `Mileage: ${trip.mileage ?? "—"}` }),
+      el("p", { text: `Service: ${trip.service_name_snapshot || "—"}` }),
+      el("p", { text: `Estimated fare: ${formatCurrency(trip.total_cost)}` }),
     ]);
     if (trip.escort_count > 0) {
       detail.append(

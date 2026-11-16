@@ -17,7 +17,7 @@ import { renderHero, greetingTitle } from "../../ui/hero.js";
 import { showEmpty } from "../../ui/status.js";
 import { tripStatusBadge, licenseBadge } from "../../ui/badges.js";
 import { ratingSummary } from "../../ui/rating.js";
-import { formatDateTime, MOBILITY_LABELS } from "../../ui/format.js";
+import { formatCurrency, formatDateTime, MOBILITY_LABELS } from "../../ui/format.js";
 import { statCards, LIVE_TRIP_STATUSES } from "../../ui/dashboard.js";
 import { listOnDutyDrivers } from "../../api/drivers.js";
 import { mapPanel, vehicleDot, fitTo, tripPoint } from "../../ui/trip-map.js";
@@ -316,6 +316,7 @@ if (user) {
           trip.mobility_need
             ? el("span", { class: "chip", text: MOBILITY_LABELS[trip.mobility_need] || trip.mobility_need })
             : null,
+          trip.total_cost ? el("div", { class: "queue-note", text: `Fare: ${formatCurrency(trip.total_cost)}` }) : null,
           declineForm,
         ]),
         el("td", { class: "dispatch-table__actions" }, [confirmBtn, declineBtn]),
@@ -443,6 +444,7 @@ if (user) {
           trip.decline_reason
             ? el("div", { class: "queue-note", text: `Declined: ${trip.decline_reason}` })
             : null,
+          trip.total_cost ? el("div", { class: "queue-note", text: `Fare: ${formatCurrency(trip.total_cost)}` }) : null,
         ]),
         el("td", {}, [select, suggestionHint(trip, select)]),
         el("td", { class: "dispatch-table__actions" }, [

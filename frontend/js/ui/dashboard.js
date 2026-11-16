@@ -1,6 +1,6 @@
 import { el, dataTable } from "./dom.js";
 import { tripStatusBadge } from "./badges.js";
-import { formatDateTime, formatDate, MOBILITY_LABELS } from "./format.js";
+import { formatCurrency, formatDateTime, formatDate, MOBILITY_LABELS } from "./format.js";
 import { ratingStars } from "./rating.js";
 
 // Trips a rider/driver can still act on (vs. terminal COMPLETED/CANCELLED/NO_SHOW).
@@ -81,6 +81,9 @@ export function featuredTrip(trip, { detailBase, role }) {
       el("span", { class: "feature-trip__countdown", text: relativeWhen(trip.scheduled_pickup_time) }),
     ]),
     el("p", { class: "feature-trip__route", text: `${trip.pickup_address} → ${trip.dropoff_address}` }),
+    trip.total_cost
+      ? el("p", { class: "feature-trip__route", text: `Fare: ${formatCurrency(trip.total_cost)}` })
+      : null,
     el("a", { class: "btn btn--primary feature-trip__cta", href: `${detailBase}?id=${trip.id}`, text: cta }),
   ]);
 }
@@ -203,6 +206,9 @@ export function nextRideCard(trip, { detailBase, cancel = {} }) {
       routeLeg("dropoff", "Destination", trip.dropoff_address),
     ]),
     driverRow,
+    trip.total_cost
+      ? el("p", { class: "next-ride__fare", text: `Estimated fare: ${formatCurrency(trip.total_cost)}` })
+      : null,
     actions,
   ]);
   if (!cancel.enabled && cancel.note) {
@@ -255,8 +261,9 @@ export function tripsTable(trips, detailBase) {
       el("td", { text: formatDate(trip.scheduled_pickup_time) }),
       el("td", { class: "mono", text: timeOnly(trip.scheduled_pickup_time) }),
       el("td", {}, [el("a", { href: `${detailBase}?id=${trip.id}`, text: trip.dropoff_address })]),
+      el("td", { class: "mono", text: formatCurrency(trip.total_cost) }),
       el("td", {}, [tripStatusBadge(trip.status)]),
     ])
   );
-  return dataTable(["Date", "Time", "Destination", "Status"], rows);
+  return dataTable(["Date", "Time", "Destination", "Fare", "Status"], rows);
 }

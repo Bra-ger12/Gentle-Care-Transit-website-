@@ -1,10 +1,17 @@
 import uuid
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from apps.accounts.models import DriverProfile, MobilityNeed, RiderProfile, User
+
+MONEY_QUANT = Decimal("0.01")  # NEW: keep all displayed/saved money to cents.
+DISTANCE_KM_QUANT = Decimal("0.01")  # NEW: booking prices use two-decimal kilometers.
+KM_PER_MILE = Decimal("1.609344")  # NEW: route service stores miles; pricing is per kilometer.
+MAX_BOOKING_DISTANCE_KM = Decimal("1000.00")  # NEW: reject implausible patient booking distances.
 
 
 class Weekday(models.IntegerChoices):
@@ -32,6 +39,68 @@ class TripStatus(models.TextChoices):
 class TripType(models.TextChoices):
     ONE_WAY = "ONE_WAY", "One way"
     ROUND_TRIP = "ROUND_TRIP", "Round trip"
+
+
+class Service(models.Model):
+    # NEW: admins manage patient-facing service tiers and their per-km prices.
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    cost_per_km = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    base_fee = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    minimum_fare = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        indexes = [models.Index(fields=["is_active", "name"])]
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        if self.minimum_fare < self.base_fee:
+            raise ValidationError(
+                {"minimum_fare": "Minimum fare cannot be lower than the base fee."}
+            )
+
+    def calculate_cost(self, distance_km):
+        """Return the fare for this service as Decimal cents.
+
+        # NEW: every estimate and saved booking uses the same server-side money
+        calculation, so browser-sent totals are never trusted.
+        """
+        distance = Decimal(str(distance_km)).quantize(DISTANCE_KM_QUANT, ROUND_HALF_UP)
+        if distance <= 0:
+            raise ValidationError({"distance_km": "Distance must be greater than 0 km."})
+        if distance > MAX_BOOKING_DISTANCE_KM:
+            raise ValidationError(
+                {
+                    "distance_km": (
+                        f"Distance cannot exceed {MAX_BOOKING_DISTANCE_KM} km. "
+                        "Call dispatch for long-distance transport."
+                    )
+                }
+            )
+
+        subtotal = self.base_fee + (distance * self.cost_per_km)
+        total = max(subtotal, self.minimum_fare)
+        return total.quantize(MONEY_QUANT, ROUND_HALF_UP)
 
 
 # Legal next-states per current status. `accept`/`decline`/`reassign` bypass
@@ -65,6 +134,21 @@ class RecurringTripSeries(models.Model):
     dropoff_lng = models.DecimalField(max_digits=9, decimal_places=6)
     mileage = models.DecimalField(max_digits=6, decimal_places=2)
     distance_estimated = models.BooleanField(default=False)
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="recurring_series",
+    )  # NEW: recurring templates remember the chosen patient service.
+    service_name_snapshot = models.CharField(max_length=100, blank=True)
+    distance_km = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    cost_per_km_used = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    base_fee_used = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    minimum_fare_used = models.DecimalField(
+        max_digits=8, decimal_places=2, default=Decimal("0.00")
+    )
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     pickup_time = models.TimeField()
     weekdays = ArrayField(models.PositiveSmallIntegerField(choices=Weekday.choices))
     start_date = models.DateField()
@@ -113,6 +197,21 @@ class Trip(models.Model):
     # so nobody mistakes a computed distance for a driven one.
     distance_estimated = models.BooleanField(default=False)
     estimated_duration_minutes = models.PositiveIntegerField(null=True, blank=True)
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="trips",
+    )  # NEW: service relation stays for reporting while snapshots lock the price.
+    service_name_snapshot = models.CharField(max_length=100, blank=True)
+    distance_km = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    cost_per_km_used = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    base_fee_used = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("0.00"))
+    minimum_fare_used = models.DecimalField(
+        max_digits=8, decimal_places=2, default=Decimal("0.00")
+    )
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     mobility_need = models.CharField(max_length=20, choices=MobilityNeed.choices, blank=True)
     # People travelling with the rider (family, aide, interpreter). They occupy
     # seats, so assignment has to know about them before it picks a vehicle.
@@ -202,6 +301,7 @@ class Trip(models.Model):
         indexes = [
             models.Index(fields=["rider", "scheduled_pickup_time"]),
             models.Index(fields=["assigned_driver", "scheduled_pickup_time"]),
+            models.Index(fields=["service", "scheduled_pickup_time"]),  # NEW: admin fare reports.
         ]
         constraints = [
             models.UniqueConstraint(

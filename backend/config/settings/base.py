@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -10,8 +11,14 @@ env = environ.Env(
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
-SECRET_KEY = env("SECRET_KEY", default="django-insecure-change-me-in-env")
 DEBUG = env("DEBUG")
+# FIX #5: production must never boot with a known fallback SECRET_KEY.
+SECRET_KEY = env("SECRET_KEY", default="")
+if not SECRET_KEY:
+    settings_module = env("DJANGO_SETTINGS_MODULE", default="")
+    if settings_module.endswith(".prod"):
+        raise ImproperlyConfigured("Set SECRET_KEY in the environment before running production.")
+    SECRET_KEY = "django-insecure-dev-only-change-me"
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 INSTALLED_APPS = [
@@ -101,6 +108,9 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+# FIX #7: uploaded patient/driver files should not be world-readable on disk.
+FILE_UPLOAD_PERMISSIONS = 0o640
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
 
 # The plain HTML/JS frontend, served by this app at the site root while DEBUG is on
 # so `runserver` alone serves the whole system on one origin (see config/urls.py).
@@ -213,3 +223,31 @@ TWILIO_FROM_NUMBER = env("TWILIO_FROM_NUMBER", default="")
 # Defaults to the server-side geocoding key; in prod use a separate referrer-restricted
 # key so the browser key can't be reused for server-side quota.
 GOOGLE_MAPS_BROWSER_KEY = env("GOOGLE_MAPS_BROWSER_KEY", default=GOOGLE_MAPS_API_KEY)
+
+# FIX #5: production-ready logging baseline without putting secrets in code.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "%(levelname)s %(asctime)s %(name)s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        }
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": env("DJANGO_LOG_LEVEL", default="INFO"),
+    },
+    "loggers": {
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        }
+    },
+}

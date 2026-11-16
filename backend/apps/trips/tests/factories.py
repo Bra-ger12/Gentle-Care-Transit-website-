@@ -5,7 +5,18 @@ from django.utils import timezone
 from factory.django import DjangoModelFactory
 
 from apps.accounts.tests.factories import RiderProfileFactory
-from apps.trips.models import RecurringTripSeries, Trip, TripStatus, Weekday
+from apps.trips.models import RecurringTripSeries, Service, Trip, TripStatus, Weekday
+
+
+class ServiceFactory(DjangoModelFactory):
+    class Meta:
+        model = Service
+
+    name = factory.Sequence(lambda n: f"Standard car {n}")
+    cost_per_km = "2.50"
+    base_fee = "5.00"
+    minimum_fare = "10.00"
+    is_active = True
 
 
 class RecurringTripSeriesFactory(DjangoModelFactory):
@@ -20,6 +31,13 @@ class RecurringTripSeriesFactory(DjangoModelFactory):
     dropoff_lat = "46.880000"
     dropoff_lng = "-96.790000"
     mileage = "3.20"
+    service = factory.SubFactory(ServiceFactory)
+    service_name_snapshot = factory.SelfAttribute("service.name")
+    distance_km = "5.15"
+    cost_per_km_used = factory.SelfAttribute("service.cost_per_km")
+    base_fee_used = factory.SelfAttribute("service.base_fee")
+    minimum_fare_used = factory.SelfAttribute("service.minimum_fare")
+    total_cost = "17.88"
     pickup_time = "09:00:00"
     weekdays = [Weekday.MONDAY, Weekday.WEDNESDAY, Weekday.FRIDAY]
     start_date = factory.LazyFunction(timezone.localdate)
@@ -40,3 +58,10 @@ class TripFactory(DjangoModelFactory):
     dropoff_lat = "46.880000"
     dropoff_lng = "-96.790000"
     mileage = "3.20"
+    service = factory.SubFactory(ServiceFactory)
+    service_name_snapshot = factory.SelfAttribute("service.name")
+    distance_km = "5.15"
+    cost_per_km_used = factory.SelfAttribute("service.cost_per_km")
+    base_fee_used = factory.SelfAttribute("service.base_fee")
+    minimum_fare_used = factory.SelfAttribute("service.minimum_fare")
+    total_cost = "17.88"

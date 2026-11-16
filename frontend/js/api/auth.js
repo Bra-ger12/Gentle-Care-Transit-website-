@@ -1,4 +1,12 @@
-import { API_BASE, apiFetch, setAccessToken, getAccessToken, setUnauthorizedHandler } from "./client.js";
+import {
+  API_BASE,
+  apiFetch,
+  getAccessToken,
+  getCsrfToken,
+  setCsrfToken,
+  setAccessToken,
+  setUnauthorizedHandler,
+} from "./client.js";
 
 let cachedUser = null;
 let refreshPromise = null;
@@ -7,17 +15,36 @@ export function currentUser() {
   return cachedUser;
 }
 
+export async function ensureCsrfToken() {
+  const existing = getCsrfToken();
+  if (existing) return existing;
+
+  const response = await fetch(`${API_BASE}/auth/csrf/`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (data.csrf) setCsrfToken(data.csrf);
+  return data.csrf || getCsrfToken() || null;
+}
+
 export async function refreshAccessToken() {
   if (!refreshPromise) {
-    refreshPromise = fetch(`${API_BASE}/auth/refresh/`, {
+    refreshPromise = ensureCsrfToken().then((token) => fetch(`${API_BASE}/auth/refresh/`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      // FIX #6: refresh is cookie-backed, so send the CSRF token Django issued at login.
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "X-CSRFToken": decodeURIComponent(token) } : {}),
+      },
       body: JSON.stringify({}),
-    })
+    }))
       .then(async (response) => {
         if (!response.ok) return null;
         const data = await response.json();
+        if (data.csrf) setCsrfToken(data.csrf);
         setAccessToken(data.access);
         return data.access;
       })
@@ -63,6 +90,7 @@ export async function bootSession() {
 
 export async function login(identifier, password) {
   const data = await apiFetch("/auth/login/", { method: "POST", body: { identifier, password }, auth: false });
+  if (data.csrf) setCsrfToken(data.csrf);
   setAccessToken(data.access);
   return getCurrentUser();
 }
@@ -92,6 +120,7 @@ export async function logout() {
     // ignore — clear local session regardless
   } finally {
     setAccessToken(null);
+    setCsrfToken(null);
     cachedUser = null;
   }
 }

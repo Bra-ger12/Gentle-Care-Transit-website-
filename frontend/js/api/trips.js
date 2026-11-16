@@ -61,6 +61,16 @@ export function createTrip(payload) {
   return apiFetch("/trips/", { method: "POST", body: payload });
 }
 
+export function listServices() {
+  // NEW: non-admin users receive active services only; admins receive all for management.
+  return apiFetch("/trips/services/");
+}
+
+export function estimateTripCost(payload) {
+  // NEW: live booking estimate; the server calculates and validates every total.
+  return apiFetch("/trips/estimate-cost/", { method: "POST", body: payload });
+}
+
 export function cancelTrip(id, reason) {
   return apiFetch(`/trips/${id}/cancel/`, { method: "POST", body: { reason } });
 }

@@ -9,7 +9,7 @@ from apps.accounts.tests.factories import AdminFactory, RiderProfileFactory
 from apps.notifications.models import Notification, NotificationCategory
 from apps.operations.models import SystemSetting
 from apps.operations.services import render_template
-from apps.trips.tests.factories import TripFactory
+from apps.trips.tests.factories import ServiceFactory, TripFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -90,6 +90,7 @@ def test_booking_lead_time_is_enforced(client, _auth):
     setting.save()
 
     profile = RiderProfileFactory()
+    service = ServiceFactory()
     _auth(client, profile.user)
 
     response = client.post(
@@ -98,6 +99,7 @@ def test_booking_lead_time_is_enforced(client, _auth):
             "scheduled_pickup_time": (timezone.now() + timedelta(minutes=30)).isoformat(),
             "pickup_address": BISMARCK,
             "dropoff_address": CLINIC,
+            "service_id": str(service.id),
         },
         format="json",
     )

@@ -12,7 +12,7 @@ from apps.accounts.tests.factories import (
 )
 from apps.notifications.models import Notification
 from apps.trips.models import Trip, TripStatus
-from apps.trips.tests.factories import TripFactory
+from apps.trips.tests.factories import ServiceFactory, TripFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -21,10 +21,12 @@ CLINIC = "Sanford Health, 300 N 7th St, Bismarck, ND"
 
 
 def _payload(**overrides):
+    service = overrides.pop("service", None) or ServiceFactory()
     payload = {
         "scheduled_pickup_time": (timezone.now() + timedelta(days=3)).isoformat(),
         "pickup_address": HOME,
         "dropoff_address": CLINIC,
+        "service_id": str(service.id),
     }
     payload.update(overrides)
     return payload

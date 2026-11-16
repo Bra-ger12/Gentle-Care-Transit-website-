@@ -9,6 +9,9 @@ from drf_spectacular.views import (
 
 from .views import PublicConfigView, frontend_file
 
+handler404 = "config.views.frontend_not_found"
+handler500 = "config.views.frontend_server_error"
+
 urlpatterns = [
     # Django's own admin lives under /django-admin/ so it can't shadow the operator
     # portal the frontend serves at /admin/*.html (both share one origin in dev).

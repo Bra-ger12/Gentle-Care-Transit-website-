@@ -1,6 +1,6 @@
-import { createTrip, createRecurringSeries } from "../../api/trips.js";
+import { createTrip, createRecurringSeries, estimateTripCost, listServices } from "../../api/trips.js";
 import { el } from "../../ui/dom.js";
-import { MOBILITY_NEEDS, WEEKDAYS } from "../../ui/format.js";
+import { formatCurrency, MOBILITY_NEEDS, WEEKDAYS } from "../../ui/format.js";
 import { clearFormErrors, showFormError } from "../../ui/form-errors.js";
 
 /**
@@ -57,6 +57,9 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
     autocomplete: "off",
     value: presetDropoff,
   });
+  const serviceSelect = el("select", { id: "book-service", required: "required" }, [
+    el("option", { value: "", text: "Loading services..." }),
+  ]);
 
   // --- when ---
   const isRecurring = el("input", { type: "checkbox", id: "book-recurring" });
@@ -86,10 +89,28 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
   pickupTime.value = "09:00";
 
   // --- return ---
-  const tripType = el("select", { id: "book-type" }, [
-    el("option", { value: "ONE_WAY", text: "One way" }),
-    el("option", { value: "ROUND_TRIP", text: "Round trip (there and back)" }),
-  ]);
+  const tripTypeOptions = [
+    { value: "ONE_WAY", label: "One way" },
+    { value: "ROUND_TRIP", label: "Round trip" },
+  ];
+  const tripTypeInputs = tripTypeOptions.map((option, index) =>
+    el("input", {
+      type: "radio",
+      name: "trip_type",
+      value: option.value,
+      checked: index === 0 ? "checked" : undefined,
+    })
+  );
+  const tripType = el(
+    "div",
+    { id: "book-type", class: "trip-type-options", role: "radiogroup", tabindex: "0" },
+    tripTypeOptions.map((option, index) =>
+      el("label", { class: "trip-type-option" }, [
+        tripTypeInputs[index],
+        el("span", { text: option.label }),
+      ])
+    )
+  );
   const returnMode = el("select", { id: "book-return-mode" }, [
     el("option", { value: "TIME", text: "A set return time" }),
     el("option", { value: "WILL_CALL", text: "Will-call — the rider phones when they're ready" }),
@@ -109,6 +130,25 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
 
   const errorEl = el("p", { class: "form-error", hidden: "hidden", role: "alert" });
   const submitBtn = el("button", { type: "submit", class: "btn btn--primary", text: "Book trip" });
+  const estimateTitle = el("p", { class: "fare-estimate__label", text: "Estimated total" });
+  const estimateAmount = el("p", { class: "fare-estimate__amount", text: "--" });
+  const estimateMeta = el("p", {
+    class: "fare-estimate__meta",
+    text: "Choose a service and enter both addresses to see the fare.",
+  });
+  const estimateBox = el("section", { class: "fare-estimate", "aria-live": "polite" }, [
+    estimateTitle,
+    estimateAmount,
+    estimateMeta,
+  ]);
+
+  function selectedTripType() {
+    return tripTypeInputs.find((input) => input.checked)?.value || "ONE_WAY";
+  }
+
+  function selectedService() {
+    return serviceSelect.value;
+  }
 
   // --- panels that show and hide together ---
   const oneTimeFields = el("div", { class: "collapsible is-open" }, [
@@ -132,14 +172,17 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
 
   function syncPanels() {
     const recurring = isRecurring.checked;
-    const roundTrip = tripType.value === "ROUND_TRIP" && !recurring;
+    const roundTrip = selectedTripType() === "ROUND_TRIP" && !recurring;
 
     oneTimeFields.classList.toggle("is-open", !recurring);
     recurringFields.classList.toggle("is-open", recurring);
     returnFields.classList.toggle("is-open", roundTrip);
     // A repeating booking is one leg per occurrence; a return on top of that is
     // a second series, which is a different thing to set up.
-    tripType.disabled = recurring;
+    tripTypeInputs.forEach((input) => {
+      input.disabled = recurring;
+    });
+    tripType.classList.toggle("is-disabled", recurring);
 
     // Collapsed inputs stay in the layout for the reveal animation, so their
     // `required` flag has to track visibility or submit blocks on a hidden field.
@@ -148,11 +191,89 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
     pickupTime.required = recurring;
     returnTime.required = roundTrip && returnMode.value === "TIME";
     returnTimeField.hidden = returnMode.value !== "TIME";
+    updateEstimate();
+  }
+
+  function setEstimatePending(message) {
+    estimateBox.classList.remove("fare-estimate--error");
+    estimateAmount.textContent = "--";
+    estimateMeta.textContent = message;
+  }
+
+  function setEstimateError(message) {
+    estimateBox.classList.add("fare-estimate--error");
+    estimateAmount.textContent = "--";
+    estimateMeta.textContent = message;
+  }
+
+  function estimatePayload() {
+    const payload = {
+      service_id: selectedService(),
+      pickup_address: pickup.value.trim(),
+      dropoff_address: dropoff.value.trim(),
+      trip_type: isRecurring.checked ? "ONE_WAY" : selectedTripType(),
+    };
+    return payload.service_id && payload.pickup_address && payload.dropoff_address ? payload : null;
+  }
+
+  let estimateTimer = null;
+  let estimateSeq = 0;
+  function updateEstimate() {
+    clearTimeout(estimateTimer);
+    // Invalidate in-flight responses immediately, including when an address is
+    // cleared before the next debounced request starts.
+    const seq = ++estimateSeq;
+    const payload = estimatePayload();
+    if (!payload) {
+      setEstimatePending("Choose a service and enter both addresses to see the fare.");
+      return;
+    }
+
+    estimateTimer = setTimeout(async () => {
+      setEstimatePending("Calculating fare...");
+      try {
+        const estimate = await estimateTripCost(payload);
+        if (seq !== estimateSeq) return;
+        estimateBox.classList.remove("fare-estimate--error");
+        estimateAmount.textContent = formatCurrency(estimate.total_cost);
+        const distance = estimate.distance_km ? `${Number(estimate.distance_km).toFixed(2)} km` : "distance pending";
+        const perKm = formatCurrency(estimate.cost_per_km);
+        const suffix = estimate.leg_count > 1 ? `, ${estimate.leg_count} legs` : "";
+        estimateMeta.textContent = `${estimate.service_name}: ${distance} at ${perKm}/km${suffix}.`;
+      } catch {
+        if (seq !== estimateSeq) return;
+        setEstimateError("Could not calculate this route. Check the addresses or call dispatch.");
+      }
+    }, 450);
+  }
+
+  async function loadServices() {
+    try {
+      const payload = await listServices();
+      const services = payload.results || payload;
+      const active = services.filter((service) => service.is_active !== false);
+      serviceSelect.replaceChildren(
+        el("option", { value: "", text: "Choose a service..." }),
+        ...active.map((service) =>
+          el("option", {
+            value: service.id,
+            text: `${service.name} - ${formatCurrency(service.cost_per_km)}/km`,
+          })
+        )
+      );
+      if (active.length === 1) serviceSelect.value = active[0].id;
+      updateEstimate();
+    } catch {
+      serviceSelect.replaceChildren(el("option", { value: "", text: "Services unavailable" }));
+      setEstimateError("Could not load service prices. Try again or call dispatch.");
+    }
   }
 
   isRecurring.addEventListener("change", syncPanels);
-  tripType.addEventListener("change", syncPanels);
+  tripTypeInputs.forEach((input) => input.addEventListener("change", syncPanels));
   returnMode.addEventListener("change", syncPanels);
+  [pickup, dropoff, serviceSelect].forEach((input) => input.addEventListener("input", updateEstimate));
+  serviceSelect.addEventListener("change", updateEstimate);
   pickupDateTime.addEventListener("change", () => {
     // The return can't precede the outbound; keep the picker honest.
     if (pickupDateTime.value) {
@@ -174,6 +295,7 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
     escort_count: escorts,
     mobility_need: mobility,
     notes,
+    service_id: serviceSelect,
     start_date: startDate,
     pickup_time: pickupTime,
     end_date: endDate,
@@ -189,6 +311,7 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
     const shared = {
       pickup_address: pickup.value.trim(),
       dropoff_address: dropoff.value.trim(),
+      service_id: selectedService(),
       mobility_need: mobility.value || undefined,
       notes: notes.value.trim() || undefined,
     };
@@ -210,10 +333,10 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
           ...shared,
           scheduled_pickup_time: new Date(pickupDateTime.value).toISOString(),
           escort_count: Number(escorts.value) || 0,
-          trip_type: tripType.value,
+          trip_type: selectedTripType(),
         };
         if (riderSelect) payload.rider_id = Number(riderSelect.value);
-        if (tripType.value === "ROUND_TRIP") {
+        if (selectedTripType() === "ROUND_TRIP") {
           if (returnMode.value === "WILL_CALL") payload.return_is_will_call = true;
           else payload.return_pickup_time = new Date(returnTime.value).toISOString();
         }
@@ -231,6 +354,8 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
     riderSelect ? field("Rider", riderSelect, "Who is this trip for?") : null,
     field("Pickup address", pickup, "Include the town, e.g. 1420 Boulevard Ave, Bismarck, ND"),
     field("Drop-off address", dropoff),
+    field("Service", serviceSelect, "The selected service locks the fare for this booking."),
+    estimateBox,
     el("label", { class: "checkbox-row" }, [isRecurring, "Repeat this trip weekly"]),
     oneTimeFields,
     recurringFields,
@@ -244,5 +369,6 @@ export function bookingForm({ riders = null, policy = null, onBooked, presetDrop
   ]);
 
   syncPanels();
+  loadServices();
   return form;
 }

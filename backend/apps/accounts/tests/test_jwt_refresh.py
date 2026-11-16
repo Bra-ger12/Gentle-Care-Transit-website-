@@ -55,6 +55,58 @@ def test_refresh_without_cookie_rejected(client):
     assert response.status_code == 401
 
 
+def test_login_sets_refresh_and_csrf_cookies(client):
+    # FIX #6: the browser needs csrftoken before it can call refresh.
+    RiderFactory(email="cookie-rider@example.com", password="CorrectPass123!")
+
+    response = client.post(
+        "/api/auth/login/",
+        {"identifier": "cookie-rider@example.com", "password": "CorrectPass123!"},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    assert "refresh_token" in response.cookies
+    assert "csrftoken" in response.cookies
+    assert response.data["csrf"]
+    assert response.cookies["csrftoken"].value
+
+
+def test_csrf_endpoint_issues_token(client):
+    # FIX #6: SPA can bootstrap a token before refreshing from an httpOnly cookie.
+    response = client.get("/api/auth/csrf/")
+
+    assert response.status_code == 200
+    assert response.data["csrf"]
+    assert "csrftoken" in response.cookies
+
+
+def test_refresh_requires_csrf_header_when_csrf_checks_are_enforced():
+    # FIX #6: refresh uses an httpOnly cookie, so browser-style CSRF checks matter.
+    client = APIClient(enforce_csrf_checks=True)
+    RiderFactory(email="csrf-rider@example.com", password="CorrectPass123!")
+    login = client.post(
+        "/api/auth/login/",
+        {"identifier": "csrf-rider@example.com", "password": "CorrectPass123!"},
+        format="json",
+    )
+    refresh_value = login.cookies["refresh_token"].value
+    csrf_value = login.cookies["csrftoken"].value
+    client.cookies["refresh_token"] = refresh_value
+
+    missing_header = client.post("/api/auth/refresh/", format="json")
+    assert missing_header.status_code == 403
+
+    with_header = client.post(
+        "/api/auth/refresh/",
+        HTTP_X_CSRFTOKEN=csrf_value,
+        format="json",
+    )
+    assert with_header.status_code == 200
+    assert "access" in with_header.data
+    assert "csrf" in with_header.data
+
+
 def test_logout_blacklists_refresh_token(logged_in_client):
     client, access, refresh_value = logged_in_client
     client.cookies["refresh_token"] = refresh_value

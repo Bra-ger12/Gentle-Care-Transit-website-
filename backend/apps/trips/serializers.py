@@ -1,10 +1,21 @@
 from datetime import timedelta
+from decimal import ROUND_HALF_UP
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Avg
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import RecurringTripSeries, Trip, TripType, Weekday
+from .models import (
+    DISTANCE_KM_QUANT,
+    KM_PER_MILE,
+    MONEY_QUANT,
+    RecurringTripSeries,
+    Service,
+    Trip,
+    TripType,
+    Weekday,
+)
 from .services import geo
 from .services.maps import GeocodingError, resolve_route
 from .services.signature import SignatureError, decode_signature
@@ -52,6 +63,102 @@ def resolve_addresses(pickup_address: str, dropoff_address: str) -> dict:
     }
 
 
+def distance_km_from_miles(miles):
+    # NEW: route lookup stores miles, while patient pricing is defined per kilometer.
+    return (miles * KM_PER_MILE).quantize(DISTANCE_KM_QUANT, ROUND_HALF_UP)
+
+
+def apply_pricing_snapshot(attrs):
+    # NEW: lock the service price at booking time so later admin changes do not
+    # alter existing trips or generated recurring rides.
+    service = attrs.get("service")
+    if service is None:
+        raise serializers.ValidationError({"service_id": "Choose a service for this booking."})
+
+    distance_km = distance_km_from_miles(attrs["mileage"])
+    try:
+        total_cost = service.calculate_cost(distance_km)
+    except DjangoValidationError as exc:
+        details = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+        raise serializers.ValidationError(details) from exc
+
+    attrs.update(
+        {
+            "service_name_snapshot": service.name,
+            "distance_km": distance_km,
+            "cost_per_km_used": service.cost_per_km,
+            "base_fee_used": service.base_fee,
+            "minimum_fare_used": service.minimum_fare,
+            "total_cost": total_cost,
+        }
+    )
+    return attrs
+
+
+class ServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Service
+        fields = [
+            "id",
+            "name",
+            "cost_per_km",
+            "base_fee",
+            "minimum_fare",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        base_fee = attrs.get("base_fee", getattr(self.instance, "base_fee", None))
+        minimum_fare = attrs.get(
+            "minimum_fare", getattr(self.instance, "minimum_fare", None)
+        )
+        if base_fee is not None and minimum_fare is not None and minimum_fare < base_fee:
+            raise serializers.ValidationError(
+                {"minimum_fare": "Minimum fare cannot be lower than the base fee."}
+            )
+        return attrs
+
+
+class CostEstimateSerializer(serializers.Serializer):
+    # NEW: browser gets live estimates, but the server validates and calculates.
+    service_id = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        source="service",
+    )
+    pickup_address = serializers.CharField(max_length=255, allow_blank=False)
+    dropoff_address = serializers.CharField(max_length=255, allow_blank=False)
+    trip_type = serializers.ChoiceField(choices=TripType.choices, default=TripType.ONE_WAY)
+
+    def validate(self, attrs):
+        route = resolve_addresses(attrs["pickup_address"], attrs["dropoff_address"])
+        distance_km = distance_km_from_miles(route["mileage"])
+        service = attrs["service"]
+        try:
+            leg_cost = service.calculate_cost(distance_km)
+        except DjangoValidationError as exc:
+            details = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+            raise serializers.ValidationError(details) from exc
+
+        leg_count = 2 if attrs.get("trip_type") == TripType.ROUND_TRIP else 1
+        attrs["estimate"] = {
+            "service_id": str(service.id),
+            "service_name": service.name,
+            "distance_km": distance_km,
+            "mileage": route["mileage"],
+            "distance_estimated": route["distance_estimated"],
+            "cost_per_km": service.cost_per_km,
+            "base_fee": service.base_fee,
+            "minimum_fare": service.minimum_fare,
+            "leg_cost": leg_cost,
+            "leg_count": leg_count,
+            "total_cost": (leg_cost * leg_count).quantize(MONEY_QUANT, ROUND_HALF_UP),
+        }
+        return attrs
+
+
 class AssignedDriverNameMixin(serializers.Serializer):
     assigned_driver_name = serializers.SerializerMethodField()
 
@@ -78,6 +185,13 @@ class TripListSerializer(AssignedDriverNameMixin, serializers.ModelSerializer):
             "dropoff_lng",
             "mileage",
             "distance_estimated",
+            "service",
+            "service_name_snapshot",
+            "distance_km",
+            "cost_per_km_used",
+            "base_fee_used",
+            "minimum_fare_used",
+            "total_cost",
             "mobility_need",
             "escort_count",
             "trip_type",
@@ -129,6 +243,13 @@ class TripDetailSerializer(AssignedDriverNameMixin, serializers.ModelSerializer)
             "mileage",
             "distance_estimated",
             "estimated_duration_minutes",
+            "service",
+            "service_name_snapshot",
+            "distance_km",
+            "cost_per_km_used",
+            "base_fee_used",
+            "minimum_fare_used",
+            "total_cost",
             "mobility_need",
             "notes",
             "cancelled_at",
@@ -282,6 +403,12 @@ class TripCreateSerializer(serializers.ModelSerializer):
     return_is_will_call = serializers.BooleanField(write_only=True, required=False, default=False)
     # RiderProfile has an integer primary key, unlike Trip's UUID.
     rider_id = serializers.IntegerField(write_only=True, required=False)
+    service_id = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        source="service",
+        write_only=True,
+        required=True,
+    )  # NEW: only active services can be chosen during booking.
 
     class Meta:
         model = Trip
@@ -299,6 +426,13 @@ class TripCreateSerializer(serializers.ModelSerializer):
             "mileage",
             "distance_estimated",
             "estimated_duration_minutes",
+            "service",
+            "service_name_snapshot",
+            "distance_km",
+            "cost_per_km_used",
+            "base_fee_used",
+            "minimum_fare_used",
+            "total_cost",
             "mobility_need",
             "escort_count",
             "notes",
@@ -307,6 +441,7 @@ class TripCreateSerializer(serializers.ModelSerializer):
             "return_pickup_time",
             "return_is_will_call",
             "rider_id",
+            "service_id",
         ]
 
         read_only_fields = [
@@ -320,6 +455,13 @@ class TripCreateSerializer(serializers.ModelSerializer):
             "mileage",
             "distance_estimated",
             "estimated_duration_minutes",
+            "service",
+            "service_name_snapshot",
+            "distance_km",
+            "cost_per_km_used",
+            "base_fee_used",
+            "minimum_fare_used",
+            "total_cost",
         ]
 
     def validate_scheduled_pickup_time(self, value):
@@ -353,6 +495,7 @@ class TripCreateSerializer(serializers.ModelSerializer):
         attrs.update(resolve_addresses(attrs["pickup_address"], attrs["dropoff_address"]))
 
         attrs["estimated_duration_minutes"] = attrs.pop("duration_minutes")
+        apply_pricing_snapshot(attrs)
 
         return attrs
 
@@ -405,6 +548,13 @@ class RecurringTripSeriesDetailSerializer(serializers.ModelSerializer):
             "dropoff_lng",
             "mileage",
             "distance_estimated",
+            "service",
+            "service_name_snapshot",
+            "distance_km",
+            "cost_per_km_used",
+            "base_fee_used",
+            "minimum_fare_used",
+            "total_cost",
             "pickup_time",
             "weekdays",
             "start_date",
@@ -420,6 +570,15 @@ class RecurringTripSeriesDetailSerializer(serializers.ModelSerializer):
 
 
 class RecurringTripSeriesCreateSerializer(serializers.ModelSerializer):
+    # FIX #3: admins booking recurring rides by phone must choose the rider.
+    rider_id = serializers.IntegerField(write_only=True, required=False)
+    service_id = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(is_active=True),
+        source="service",
+        write_only=True,
+        required=True,
+    )  # NEW: recurring bookings also snapshot service pricing.
+
     class Meta:
         model = RecurringTripSeries
 
@@ -433,6 +592,13 @@ class RecurringTripSeriesCreateSerializer(serializers.ModelSerializer):
             "dropoff_lng",
             "mileage",
             "distance_estimated",
+            "service",
+            "service_name_snapshot",
+            "distance_km",
+            "cost_per_km_used",
+            "base_fee_used",
+            "minimum_fare_used",
+            "total_cost",
             "pickup_time",
             "weekdays",
             "start_date",
@@ -440,6 +606,8 @@ class RecurringTripSeriesCreateSerializer(serializers.ModelSerializer):
             "mobility_need",
             "notes",
             "is_active",
+            "rider_id",
+            "service_id",
         ]
 
         read_only_fields = [
@@ -450,6 +618,13 @@ class RecurringTripSeriesCreateSerializer(serializers.ModelSerializer):
             "dropoff_lng",
             "mileage",
             "distance_estimated",
+            "service",
+            "service_name_snapshot",
+            "distance_km",
+            "cost_per_km_used",
+            "base_fee_used",
+            "minimum_fare_used",
+            "total_cost",
             "is_active",
         ]
 
@@ -479,5 +654,6 @@ class RecurringTripSeriesCreateSerializer(serializers.ModelSerializer):
         # its own. Everything else from the lookup is kept.
 
         attrs.pop("duration_minutes")
+        apply_pricing_snapshot(attrs)
 
         return attrs

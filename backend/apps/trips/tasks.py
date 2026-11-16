@@ -56,6 +56,15 @@ def generate_recurring_trips(series_id: str | None = None, window_days: int = 14
                     dropoff_lat=series.dropoff_lat,
                     dropoff_lng=series.dropoff_lng,
                     mileage=series.mileage,
+                    distance_estimated=series.distance_estimated,
+                    service=series.service,  # NEW: generated rides keep the series service.
+                    service_name_snapshot=series.service_name_snapshot,
+                    distance_km=series.distance_km,  # NEW: copy the validated priced distance.
+                    # Series price changes do not rewrite generated trips.
+                    cost_per_km_used=series.cost_per_km_used,
+                    base_fee_used=series.base_fee_used,  # NEW: copy fare inputs for audits.
+                    minimum_fare_used=series.minimum_fare_used,  # NEW: copy fare inputs for audits.
+                    total_cost=series.total_cost,
                     mobility_need=series.mobility_need,
                     notes=series.notes,
                 ),

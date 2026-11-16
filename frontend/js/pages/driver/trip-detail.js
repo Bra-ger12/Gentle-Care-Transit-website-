@@ -8,7 +8,7 @@ import { tripStatusBadge } from "../../ui/badges.js";
 import { ratingStars } from "../../ui/rating.js";
 import { labelledRow, labelledRows, LIVE_TRIP_STATUSES } from "../../ui/dashboard.js";
 import { reasonAction } from "../../ui/reason-action.js";
-import { MOBILITY_LABELS, formatDateTime } from "../../ui/format.js";
+import { formatCurrency, MOBILITY_LABELS, formatDateTime } from "../../ui/format.js";
 import { tripCompletionForm } from "../shared/trip-completion-form.js";
 import { showToast } from "../../ui/toast.js";
 
@@ -114,6 +114,7 @@ if (user) {
       labelledRow("🏁", "Dropoff", trip.dropoff_address),
       labelledRow("⏱️", "Scheduled pickup", formatDateTime(trip.scheduled_pickup_time)),
       labelledRow("🛣️", "Booked mileage", trip.mileage ? `${Number(trip.mileage).toFixed(1)} mi` : "—"),
+      labelledRow("💵", "Estimated fare", formatCurrency(trip.total_cost)),
       labelledRow("🚐", "Driver", trip.assigned_driver_name || "Unassigned"),
     ]);
   }

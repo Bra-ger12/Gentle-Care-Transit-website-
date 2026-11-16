@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from apps.accounts.tests.factories import AdminFactory, RiderProfileFactory
 from apps.trips.models import Trip, TripStatus, TripType
+from apps.trips.tests.factories import ServiceFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -15,10 +16,12 @@ CLINIC = "Sanford Health, 300 N 7th St, Bismarck, ND"
 
 
 def _payload(**overrides):
+    service = overrides.pop("service", None) or ServiceFactory()
     payload = {
         "scheduled_pickup_time": (timezone.now() + timedelta(days=3)).isoformat(),
         "pickup_address": HOME,
         "dropoff_address": CLINIC,
+        "service_id": str(service.id),
     }
     payload.update(overrides)
     return payload

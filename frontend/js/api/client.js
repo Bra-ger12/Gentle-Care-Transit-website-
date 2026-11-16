@@ -10,6 +10,19 @@ export const API_BASE = STANDALONE_STATIC_PORTS.has(window.location.port)
 
 let accessToken = null;
 let unauthorizedHandler = null;
+let csrfToken = null;
+
+// FIX #6: Django validates unsafe cookie-backed requests with this CSRF token.
+export function getCsrfToken() {
+  return csrfToken || document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("csrftoken="))
+    ?.split("=")[1];
+}
+
+export function setCsrfToken(token) {
+  csrfToken = token || null;
+}
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -27,6 +40,9 @@ async function doFetch(path, { method = "GET", body, isForm = false, auth = true
   const headers = {};
   if (!isForm && body !== undefined) headers["Content-Type"] = "application/json";
   if (auth && accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  const unsafe = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(method.toUpperCase());
+  const token = getCsrfToken();
+  if (unsafe && token) headers["X-CSRFToken"] = decodeURIComponent(token);
 
   const response = await fetch(`${API_BASE}${path}`, {
     method,

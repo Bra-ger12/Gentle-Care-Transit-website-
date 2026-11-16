@@ -12,6 +12,7 @@ from apps.accounts.models import Role, User
 from apps.accounts.tests.factories import RiderProfileFactory
 from apps.operations.models import SystemSetting
 from apps.trips.models import Trip
+from apps.trips.tests.factories import ServiceFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -194,10 +195,12 @@ def test_the_new_link_works(client, _auth):
 
 
 def _booking():
+    service = ServiceFactory()
     return {
         "scheduled_pickup_time": (timezone.now() + timedelta(days=2)).isoformat(),
         "pickup_address": "1420 Boulevard Ave, Bismarck, ND",
         "dropoff_address": "Sanford Health, 300 N 7th St, Bismarck, ND",
+        "service_id": str(service.id),
     }
 
 

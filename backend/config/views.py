@@ -1,9 +1,30 @@
 from django.conf import settings
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.views.static import serve
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+def _frontend_error_response(filename, status_code):
+    """Return a static frontend error page when one is available."""
+    try:
+        page = (settings.FRONTEND_DIR / filename).read_text(encoding="utf-8")
+    except OSError:
+        return HttpResponse(status=status_code)
+    return HttpResponse(
+        page,
+        status=status_code,
+        content_type="text/html; charset=utf-8",
+    )
+
+
+def frontend_not_found(request, exception=None):
+    return _frontend_error_response("404.html", 404)
+
+
+def frontend_server_error(request):
+    return _frontend_error_response("500.html", 500)
 
 
 class PublicConfigView(APIView):

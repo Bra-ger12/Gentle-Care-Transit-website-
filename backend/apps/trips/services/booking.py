@@ -47,6 +47,14 @@ def create_return_leg(outbound: Trip, return_time=None, is_will_call: bool = Fal
         mileage=outbound.mileage,
         distance_estimated=outbound.distance_estimated,
         estimated_duration_minutes=outbound.estimated_duration_minutes,
+        service=outbound.service,  # NEW: return leg keeps the same service/reporting tier.
+        service_name_snapshot=outbound.service_name_snapshot,  # NEW: preserve locked fare text.
+        distance_km=outbound.distance_km,  # NEW: same two points, same priced distance.
+        # Later admin changes cannot affect the saved fare.
+        cost_per_km_used=outbound.cost_per_km_used,
+        base_fee_used=outbound.base_fee_used,  # NEW: snapshot the full fare inputs.
+        minimum_fare_used=outbound.minimum_fare_used,  # NEW: snapshot the full fare inputs.
+        total_cost=outbound.total_cost,  # NEW: save the return leg total at booking time.
         mobility_need=outbound.mobility_need,
         escort_count=outbound.escort_count,
         notes=outbound.notes,

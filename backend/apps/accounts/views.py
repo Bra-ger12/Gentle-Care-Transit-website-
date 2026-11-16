@@ -1,7 +1,10 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
+from django.middleware.csrf import get_token
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -58,6 +61,21 @@ def _set_refresh_cookie(response, refresh_token: str):
     )
 
 
+def _set_csrf_cookie(response, request):
+    # FIX #6: explicitly issue the readable CSRF cookie that refresh must echo.
+    token = get_token(request)
+    response.set_cookie(
+        key=settings.CSRF_COOKIE_NAME,
+        value=token,
+        secure=settings.CSRF_COOKIE_SECURE,
+        httponly=getattr(settings, "CSRF_COOKIE_HTTPONLY", False),
+        samesite=settings.CSRF_COOKIE_SAMESITE,
+        max_age=getattr(settings, "CSRF_COOKIE_AGE", None),
+        path=getattr(settings, "CSRF_COOKIE_PATH", "/"),
+    )
+    return token
+
+
 def _clear_refresh_cookie(response):
     response.delete_cookie(key=settings.JWT_REFRESH_COOKIE_NAME, path="/api/auth/")
 
@@ -112,20 +130,44 @@ class LoginView(TokenObtainPairView):
     serializer_class = IdentifierTokenObtainPairSerializer
     permission_classes = [permissions.AllowAny]
 
+    @method_decorator(ensure_csrf_cookie)
     def post(self, request, *args, **kwargs):
+        # FIX #6: login issues the CSRF cookie used by the refresh-cookie flow.
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        response = Response({"access": data["access"]}, status=status.HTTP_200_OK)
+        csrf_token = get_token(request)
+        response = Response(
+            {"access": data["access"], "csrf": csrf_token},
+            status=status.HTTP_200_OK,
+        )
         _set_refresh_cookie(response, data["refresh"])
+        _set_csrf_cookie(response, request)
+        return response
+
+
+class CsrfTokenView(APIView):
+    """Issue a CSRF token for the static frontend before cookie-backed refresh."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    @method_decorator(ensure_csrf_cookie)
+    def get(self, request, *args, **kwargs):
+        # FIX #6: SPA can fetch a token before POSTing to the refresh endpoint.
+        csrf_token = get_token(request)
+        response = Response({"csrf": csrf_token})
+        _set_csrf_cookie(response, request)
         return response
 
 
 class RefreshView(APIView):
     permission_classes = [permissions.AllowAny]
 
+    @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
+        # FIX #6: refresh uses an httpOnly cookie, so require Django's CSRF check.
         raw_refresh = request.COOKIES.get(settings.JWT_REFRESH_COOKIE_NAME)
         if not raw_refresh:
             return Response(
@@ -152,8 +194,10 @@ class RefreshView(APIView):
             except AttributeError:
                 pass
 
-        response = Response({"access": access}, status=status.HTTP_200_OK)
+        csrf_token = get_token(request)
+        response = Response({"access": access, "csrf": csrf_token}, status=status.HTTP_200_OK)
         _set_refresh_cookie(response, str(new_refresh))
+        _set_csrf_cookie(response, request)
         return response
 
 

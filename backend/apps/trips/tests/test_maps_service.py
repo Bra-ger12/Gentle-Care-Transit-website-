@@ -18,6 +18,7 @@ import pytest
 from apps.accounts.tests.factories import RiderProfileFactory
 from apps.trips.models import Trip
 from apps.trips.services.maps import GeocodingError, geocode_address, resolve_route
+from apps.trips.tests.factories import ServiceFactory
 
 ADDRESS = "1420 Boulevard Ave, Bismarck, ND"
 DESTINATION = "Sanford Health, 300 N 7th St, Fargo, ND"
@@ -109,6 +110,7 @@ def test_booking_succeeds_with_no_maps_key(client, _auth, settings):
     """The end-to-end shape of a fresh checkout with no API key."""
     settings.GOOGLE_MAPS_API_KEY = ""
     profile = RiderProfileFactory()
+    service = ServiceFactory()
     _auth(client, profile.user)
 
     response = client.post(
@@ -117,6 +119,7 @@ def test_booking_succeeds_with_no_maps_key(client, _auth, settings):
             "scheduled_pickup_time": "2026-12-01T09:00:00Z",
             "pickup_address": ADDRESS,
             "dropoff_address": "Sanford Health, 300 N 7th St, Bismarck, ND",
+            "service_id": str(service.id),
         },
         format="json",
     )
@@ -132,6 +135,7 @@ def test_booking_succeeds_with_no_maps_key(client, _auth, settings):
 def test_booking_rejects_an_unplaceable_address(client, _auth, settings):
     settings.GOOGLE_MAPS_API_KEY = ""
     profile = RiderProfileFactory()
+    service = ServiceFactory()
     _auth(client, profile.user)
 
     response = client.post(
@@ -140,6 +144,7 @@ def test_booking_rejects_an_unplaceable_address(client, _auth, settings):
             "scheduled_pickup_time": "2026-12-01T09:00:00Z",
             "pickup_address": "somewhere over there",
             "dropoff_address": "Sanford Health, 300 N 7th St, Bismarck, ND",
+            "service_id": str(service.id),
         },
         format="json",
     )
@@ -152,6 +157,7 @@ def test_booking_rejects_an_unplaceable_address(client, _auth, settings):
 def test_booking_rejects_identical_pickup_and_dropoff(client, _auth, settings):
     settings.GOOGLE_MAPS_API_KEY = ""
     profile = RiderProfileFactory()
+    service = ServiceFactory()
     _auth(client, profile.user)
 
     response = client.post(
@@ -160,6 +166,7 @@ def test_booking_rejects_identical_pickup_and_dropoff(client, _auth, settings):
             "scheduled_pickup_time": "2026-12-01T09:00:00Z",
             "pickup_address": ADDRESS,
             "dropoff_address": "1420 Boulevard Ave., Bismarck ND",
+            "service_id": str(service.id),
         },
         format="json",
     )

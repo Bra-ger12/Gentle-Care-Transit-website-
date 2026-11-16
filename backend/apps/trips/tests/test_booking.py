@@ -8,6 +8,7 @@ from django.utils import timezone
 from apps.accounts.tests.factories import DriverFactory, RiderProfileFactory
 from apps.trips.models import Trip, TripStatus
 from apps.trips.services.maps import RouteResolution
+from apps.trips.tests.factories import ServiceFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -23,10 +24,12 @@ ROUTE_RESULT = RouteResolution(
 
 
 def _payload(**overrides):
+    service = overrides.pop("service", None) or ServiceFactory()
     payload = {
         "scheduled_pickup_time": (timezone.now() + timedelta(days=3)).isoformat(),
         "pickup_address": "123 Main St, Fargo, ND",
         "dropoff_address": "456 Broadway, Fargo, ND",
+        "service_id": str(service.id),
         "mobility_need": "",
         "notes": "",
     }
@@ -90,3 +93,18 @@ def test_booking_a_past_pickup_time_is_rejected(mock_route, client, _auth):
     response = client.post("/api/trips/", payload, format="json")
 
     assert response.status_code == 400
+
+
+@patch("apps.trips.serializers.resolve_route", return_value=ROUTE_RESULT)
+def test_duplicate_active_booking_is_rejected(mock_route, client, _auth):
+    # FIX #4: a patient double-submit must not create two active rides.
+    profile = RiderProfileFactory()
+    _auth(client, profile.user)
+    payload = _payload()
+
+    first = client.post("/api/trips/", payload, format="json")
+    second = client.post("/api/trips/", payload, format="json")
+
+    assert first.status_code == 201, first.data
+    assert second.status_code == 400
+    assert Trip.objects.filter(rider=profile).count() == 1
